@@ -1,0 +1,237 @@
+@import 'tailwindcss';
+
+@import 'tw-animate-css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-sans:
+        Instrument Sans, ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+
+    --radius-lg: var(--radius);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-sm: calc(var(--radius) - 4px);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar-background);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    /* 强调色 —— 现代简约克制主色（靛蓝） */
+    --color-brand: var(--brand);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-accent-amber: var(--accent-amber);
+    --color-accent-coral: var(--accent-coral);
+    --color-accent-blue: var(--accent-blue);
+    --color-accent-green: var(--accent-green);
+    --color-accent-violet: var(--accent-violet);
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentColor);
+    }
+}
+
+@layer utilities {
+    body,
+    html {
+        --font-sans:
+            'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+            'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+            'Noto Color Emoji';
+    }
+}
+
+:root {
+    /* 亮色：现代简约 —— 中性灰底 + 克制靛蓝主色，细边框 + 轻投影 */
+    --radius: 0.625rem; /* 10px */
+
+    --background: hsl(220 20% 97%); /* 应用画布 #F7F8FA */
+    --foreground: hsl(240 10% 12%); /* 主文本 #1C1D21 */
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(240 10% 12%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(240 10% 12%);
+
+    --primary: hsl(240 60% 60%); /* 靛蓝 #5B5BD6 */
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(220 16% 96%); /* 列/次级底 #F1F3F5 */
+    --secondary-foreground: hsl(240 10% 18%);
+    --muted: hsl(220 16% 96%);
+    --muted-foreground: hsl(220 9% 40%); /* 次级文本 #5B6068 */
+
+    --accent: hsl(220 16% 96%); /* hover 态底 */
+    --accent-foreground: hsl(240 10% 18%);
+
+    --destructive: hsl(358 75% 59%); /* #E5484D */
+    --destructive-foreground: hsl(0 0% 100%);
+
+    --border: hsl(220 14% 91%); /* 细边框 #E6E8EB */
+    --input: hsl(220 14% 88%);
+    --ring: hsl(240 60% 60%); /* 聚焦环 = 主色 */
+
+    --chart-1: hsl(240 60% 60%);
+    --chart-2: hsl(160 55% 42%);
+    --chart-3: hsl(38 92% 50%);
+    --chart-4: hsl(220 9% 55%);
+    --chart-5: hsl(258 70% 66%);
+
+    --sidebar-background: hsl(0 0% 100%);
+    --sidebar-foreground: hsl(240 10% 20%);
+    --sidebar-primary: hsl(240 60% 60%);
+    --sidebar-primary-foreground: hsl(0 0% 100%);
+    --sidebar-accent: hsl(220 16% 96%);
+    --sidebar-accent-foreground: hsl(240 10% 20%);
+    --sidebar-border: hsl(220 14% 91%);
+    --sidebar-ring: hsl(240 60% 60%);
+    --sidebar: hsl(0 0% 100%);
+
+    /* 强调色（克制） */
+    --brand: hsl(240 60% 60%);
+    --brand-foreground: hsl(0 0% 100%);
+    --accent-amber: hsl(38 92% 50%);
+    --accent-coral: hsl(8 78% 60%);
+    --accent-blue: hsl(240 60% 60%);
+    --accent-green: hsl(152 56% 42%);
+    --accent-violet: hsl(258 70% 66%);
+}
+
+.dark {
+    /* 深色：中性炭灰 + 更亮靛蓝，清晰不刺眼 */
+    --background: hsl(240 8% 9%);
+    --foreground: hsl(220 14% 92%);
+    --card: hsl(240 7% 12%);
+    --card-foreground: hsl(220 14% 92%);
+    --popover: hsl(240 7% 12%);
+    --popover-foreground: hsl(220 14% 92%);
+
+    --primary: hsl(240 70% 68%);
+    --primary-foreground: hsl(240 30% 12%);
+    --secondary: hsl(240 6% 17%);
+    --secondary-foreground: hsl(220 14% 92%);
+    --muted: hsl(240 6% 16%);
+    --muted-foreground: hsl(220 10% 64%);
+
+    --accent: hsl(240 6% 18%);
+    --accent-foreground: hsl(220 14% 94%);
+
+    --destructive: hsl(358 72% 60%);
+    --destructive-foreground: hsl(0 0% 100%);
+
+    --border: hsl(240 6% 20%);
+    --input: hsl(240 6% 22%);
+    --ring: hsl(240 70% 68%);
+
+    --chart-1: hsl(240 70% 68%);
+    --chart-2: hsl(160 58% 52%);
+    --chart-3: hsl(38 92% 60%);
+    --chart-4: hsl(220 10% 66%);
+    --chart-5: hsl(258 74% 70%);
+
+    --sidebar-background: hsl(240 9% 8%);
+    --sidebar-foreground: hsl(220 12% 86%);
+    --sidebar-primary: hsl(240 70% 68%);
+    --sidebar-primary-foreground: hsl(240 30% 12%);
+    --sidebar-accent: hsl(240 7% 16%);
+    --sidebar-accent-foreground: hsl(220 12% 90%);
+    --sidebar-border: hsl(240 7% 18%);
+    --sidebar-ring: hsl(240 70% 68%);
+    --sidebar: hsl(240 9% 8%);
+
+    --brand: hsl(240 70% 68%);
+    --brand-foreground: hsl(240 30% 12%);
+    --accent-amber: hsl(38 92% 60%);
+    --accent-coral: hsl(8 82% 64%);
+    --accent-blue: hsl(240 70% 68%);
+    --accent-green: hsl(152 56% 52%);
+    --accent-violet: hsl(258 74% 70%);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+@layer utilities {
+    /* Board 页弹窗：圆角对齐原型 18px（仅限看板页弹窗，不影响其它页） */
+    [data-slot='dialog-content'].reflow-dialog,
+    [data-slot='alert-dialog-content'].reflow-dialog {
+        border-radius: 18px;
+    }
+
+    /* 移动端：居中弹窗改为底部抽屉（圆角朝上） */
+    @media (max-width: 640px) {
+        [data-slot='dialog-content'],
+        [data-slot='alert-dialog-content'] {
+            position: fixed !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            top: auto !important;
+            transform: none !important;
+            max-width: 100% !important;
+            border-radius: 18px 18px 0 0 !important;
+            border-bottom: none;
+        }
+    }
+}
