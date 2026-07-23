@@ -33,8 +33,12 @@ export function useBoardRealtime(getSlug: () => string) {
     const onlineMembers = ref<OnlineMember[]>([]);
     const connected = ref(false);
 
+    // 他人正在编辑的卡片映射：cardId -> { id, name }
+    const editing = ref<Record<number, { id: number; name: string }>>({});
+
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
     let currentSlug = '';
+    let presenceChannel: ReturnType<ReturnType<typeof getEcho>['join']> | null = null;
 
     // 强制清除 pusher-js 内部可能残留的「已退订但未移除」的频道对象。
     // 根因：pusher-js 的 Channel.unsubscribe() 只把 subscribed=false 并发送
@@ -64,6 +68,8 @@ export function useBoardRealtime(getSlug: () => string) {
             removeStaleChannel(echo, currentSlug);
         }
         currentSlug = '';
+        presenceChannel = null;
+        editing.value = {};
     }
 
     // 防抖刷新看板（供 board.updated 使用）
@@ -129,6 +135,33 @@ export function useBoardRealtime(getSlug: () => string) {
             });
 
         presence.listen('.board.updated', onUpdated);
+
+        // 字段级"谁在编辑"指示：监听他人通过 whisper 发出的编辑状态
+        presence.listenForWhisper('card:focus', (payload: { cardId: number; id: number; name: string }) => {
+            if (payload?.cardId) {
+                editing.value = { ...editing.value, [payload.cardId]: { id: payload.id, name: payload.name } };
+            }
+        });
+        presence.listenForWhisper('card:blur', (payload: { cardId: number; id: number }) => {
+            if (payload?.cardId && editing.value[payload.cardId]?.id === payload.id) {
+                const next = { ...editing.value };
+                delete next[payload.cardId];
+                editing.value = next;
+            }
+        });
+
+        presenceChannel = presence;
+    }
+
+    /**
+     * 广播"我正在编辑某卡片"的实时指示（经由 presence 频道 whisper）。
+     * 他人会据此在该卡片上显示编辑者头像/标识。
+     */
+    function whisper(event: 'card:focus' | 'card:blur', data: { cardId: number; id: number; name: string }): void {
+        const channel = presenceChannel;
+        if (channel && typeof (channel as unknown as { whisper?: Function }).whisper === 'function') {
+            (channel as unknown as { whisper: (e: string, d: unknown) => void }).whisper(event, data);
+        }
     }
 
     // 用 immediate watch 替代 onMounted：
@@ -163,5 +196,5 @@ export function useBoardRealtime(getSlug: () => string) {
         }
     });
 
-    return { onlineMembers, connected };
+    return { onlineMembers, connected, editing, whisper };
 }

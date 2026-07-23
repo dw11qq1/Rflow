@@ -7,6 +7,9 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/*.log
+/storage/*.sqlite
+/storage/shots/
 /resources/js/actions
 /resources/js/routes
 /resources/js/wayfinder

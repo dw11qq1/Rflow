@@ -80,8 +80,12 @@ class BoardController extends Controller
             'columns' => fn ($q) => $q->orderBy('position'),
             'columns.cards' => fn ($q) => $q->orderBy('position'),
             'columns.cards.assignee' => fn ($q) => $q->select('id', 'name'),
+            'columns.cards.labels' => fn ($q) => $q->select('id', 'name', 'color'),
+            'columns.cards.subtasks' => fn ($q) => $q->orderBy('position'),
             'columns.cards.comments' => fn ($q) => $q->with('user:id,name')->latest(),
+            'labels' => fn ($q) => $q->orderBy('name'),
             'members' => fn ($q) => $q->select('users.id', 'users.name')->withPivot('role'),
+            'activities' => fn ($q) => $q->with('user:id,name')->latest()->limit(50),
         ]);
 
         return Inertia::render('Board/Show', [

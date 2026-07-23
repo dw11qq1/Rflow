@@ -238,6 +238,24 @@ wss.on('connection', (ws) => {
             leaveChannel(ws, (msg.data || {}).channel);
             return;
         }
+        // 客户端事件（whisper）：事件名以 client- 前缀、频道为 presence/private。
+        // 仅中继给同频道的其他订阅者（不含发送者），用于"谁在编辑"等实时指示。
+        if (
+            typeof msg.event === 'string' &&
+            msg.event.startsWith('client-') &&
+            typeof msg.channel === 'string' &&
+            (msg.channel.startsWith('presence') || msg.channel.startsWith('private'))
+        ) {
+            const client = clients.get(ws);
+            if (client && client.channels.has(msg.channel)) {
+                broadcastToChannel(
+                    msg.channel,
+                    { event: msg.event, channel: msg.channel, data: msg.data ?? {} },
+                    client.socketId,
+                );
+            }
+            return;
+        }
     });
 
     ws.on('close', () => {

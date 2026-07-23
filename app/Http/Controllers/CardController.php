@@ -50,10 +50,19 @@ class CardController extends Controller
             'description' => ['nullable', 'string'],
             'assignee_id' => ['nullable', 'exists:users,id'],
             'due_date' => ['nullable', 'date'],
+            'priority' => ['nullable', 'in:low,medium,high'],
+            'color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'labels' => ['nullable', 'array'],
+            'labels.*' => ['integer', 'exists:labels,id'],
         ]);
 
         $oldAssignee = $card->assignee_id;
         $card->update($validated);
+
+        // 标签：仅当请求显式携带 labels 字段时才同步，避免更新其它字段时清空标签
+        if (array_key_exists('labels', $validated)) {
+            $card->labels()->sync($validated['labels'] ?? []);
+        }
 
         // 指派变更时通知新的被指派者（本人除外）
         if (array_key_exists('assignee_id', $validated)

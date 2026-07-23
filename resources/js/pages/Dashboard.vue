@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { LayoutGrid, Layers, FileText, Users, Plus, ArrowRight, BarChart3, Activity as ActivityIcon } from '@lucide/vue';
+import { LayoutGrid, Layers, FileText, Users, Plus, ArrowRight, BarChart3, Activity as ActivityIcon, CalendarClock } from '@lucide/vue';
 import { useI18n } from 'vue-i18n';
 import { index as boardsIndex, create as boardsCreate, show as boardsShow, retro as boardsRetro } from '@/routes/boards';
 import { dashboard } from '@/routes';
@@ -41,8 +41,18 @@ interface ActivityItem {
     created_at: string;
     board: { id: number; slug: string; name: string } | null;
 }
+interface DueItem {
+    id: number;
+    title: string;
+    due_date: string;
+    days: number;
+    type: 'soon' | 'overdue';
+    board_slug: string | null;
+    board_name: string | null;
+    assignee: string | null;
+}
 
-defineProps<{ boards: Board[]; stats: Stats; retro: RetroItem[]; activities: ActivityItem[] }>();
+defineProps<{ boards: Board[]; stats: Stats; retro: RetroItem[]; activities: ActivityItem[]; dueSoon: DueItem[]; overdue: DueItem[] }>();
 
 defineOptions({
     layout: {
@@ -65,6 +75,16 @@ function activityTitle(a: ActivityItem): string {
 
 function formatDateTime(d: string): string {
     return d ? d.replace('T', ' ').slice(0, 16) : '';
+}
+
+function dueMeta(item: DueItem): { label: string; tone: 'soon' | 'overdue' } {
+    if (item.days < 0) {
+        return { label: t('dashboard.daysOverdue', { n: Math.abs(item.days) }), tone: 'overdue' };
+    }
+    if (item.days === 0) {
+        return { label: t('dashboard.dueToday'), tone: 'soon' };
+    }
+    return { label: t('dashboard.daysLeft', { n: item.days }), tone: 'soon' };
 }
 
 // 迷你趋势（SVG 折线）
@@ -120,6 +140,73 @@ function sparkPoints(trend: { total: number }[]): string {
                 <p class="mt-2 text-3xl font-semibold">{{ stats.members }}</p>
             </div>
         </div>
+
+        <!-- 到期与逾期 -->
+        <section>
+            <div class="mb-3 flex items-center gap-2">
+                <CalendarClock class="size-4 text-primary" />
+                <h2 class="text-sm font-semibold">{{ t('dashboard.dueTitle') }}</h2>
+            </div>
+
+            <div
+                v-if="dueSoon.length === 0 && overdue.length === 0"
+                class="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground"
+            >
+                {{ t('dashboard.noDue') }}
+            </div>
+
+            <div v-else class="grid auto-rows-min gap-4 sm:grid-cols-2">
+                <!-- 已逾期 -->
+                <div class="rounded-xl border border-sidebar-border bg-card p-4 shadow-sm">
+                    <div class="mb-2 flex items-center gap-2 text-sm font-medium text-red-600">
+                        <span class="inline-flex size-2 rounded-full bg-red-500"></span>
+                        {{ t('dashboard.overdue') }}
+                        <span class="text-xs font-normal text-muted-foreground">({{ overdue.length }})</span>
+                    </div>
+                    <ul v-if="overdue.length" class="space-y-2">
+                        <li v-for="item in overdue" :key="item.id" class="flex items-center justify-between gap-2 text-sm">
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate font-medium">
+                                    <Link v-if="item.board_slug" :href="boardsShow(item.board_slug).url" class="hover:text-primary hover:underline">{{ item.title }}</Link>
+                                    <template v-else>{{ item.title }}</template>
+                                </p>
+                                <p class="truncate text-xs text-muted-foreground">
+                                    <span v-if="item.board_name">{{ item.board_name }}</span>
+                                    <span v-if="item.assignee" class="ml-1">· {{ item.assignee }}</span>
+                                </p>
+                            </div>
+                            <span class="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">{{ dueMeta(item).label }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="text-xs text-muted-foreground">{{ t('dashboard.noDue') }}</p>
+                </div>
+
+                <!-- 临近到期 -->
+                <div class="rounded-xl border border-sidebar-border bg-card p-4 shadow-sm">
+                    <div class="mb-2 flex items-center gap-2 text-sm font-medium text-amber-600">
+                        <span class="inline-flex size-2 rounded-full bg-amber-500"></span>
+                        {{ t('dashboard.dueSoon') }}
+                        <span class="text-xs font-normal text-muted-foreground">({{ dueSoon.length }})</span>
+                    </div>
+                    <ul v-if="dueSoon.length" class="space-y-2">
+                        <li v-for="item in dueSoon" :key="item.id" class="flex items-center justify-between gap-2 text-sm">
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate font-medium">
+                                    <Link v-if="item.board_slug" :href="boardsShow(item.board_slug).url" class="hover:text-primary hover:underline">{{ item.title }}</Link>
+                                    <template v-else>{{ item.title }}</template>
+                                </p>
+                                <p class="truncate text-xs text-muted-foreground">
+                                    <span v-if="item.board_name">{{ item.board_name }}</span>
+                                    <span v-if="item.assignee" class="ml-1">· {{ item.assignee }}</span>
+                                </p>
+                            </div>
+                            <span class="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">{{ dueMeta(item).label }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="text-xs text-muted-foreground">{{ t('dashboard.noDue') }}</p>
+                </div>
+            </div>
+        </section>
 
         <!-- 最近看板 -->
         <section>

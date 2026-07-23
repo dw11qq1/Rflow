@@ -5,8 +5,10 @@ use App\Http\Controllers\CardController;
 use App\Http\Controllers\ColumnController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LabelController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SubtaskController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TrashController;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +58,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 评论
     Route::post('comments', [CommentController::class, 'store'])->name('comments.store');
     Route::delete('comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
+
+    // 看板标签
+    Route::post('boards/{board:slug}/labels', [LabelController::class, 'store'])->name('labels.store');
+    Route::patch('boards/{board:slug}/labels/{label}', [LabelController::class, 'update'])->name('labels.update');
+    Route::delete('boards/{board:slug}/labels/{label}', [LabelController::class, 'destroy'])->name('labels.destroy');
+
+    // 卡片子任务
+    Route::post('subtasks', [SubtaskController::class, 'store'])->name('subtasks.store');
+    Route::patch('subtasks/{subtask}', [SubtaskController::class, 'update'])->name('subtasks.update');
+    Route::delete('subtasks/{subtask}', [SubtaskController::class, 'destroy'])->name('subtasks.destroy');
+    Route::post('subtasks/reorder', [SubtaskController::class, 'reorder'])->name('subtasks.reorder');
 
     // 看板成员管理（邀请 / 改角色 / 移除）
     Route::post('boards/{board:slug}/members', [MemberController::class, 'store'])->name('members.store');

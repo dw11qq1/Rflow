@@ -48,6 +48,11 @@ class Board extends Model
         return $this->hasMany(Column::class);
     }
 
+    public function labels(): HasMany
+    {
+        return $this->hasMany(Label::class)->orderBy('name');
+    }
+
     public function cards(): HasMany
     {
         return $this->hasMany(Card::class);

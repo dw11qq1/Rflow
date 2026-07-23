@@ -2,7 +2,7 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch, toRaw, onMounted, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Columns3, Plus, MoreVertical, Pencil, Trash2, BarChart3, ArrowLeft, GripVertical, Calendar, User as UserIcon, UserPlus, Crown, ShieldCheck, Mail, UserMinus, Users, AlertTriangle, MessageSquare } from '@lucide/vue';
+import { Columns3, Plus, MoreVertical, Pencil, Trash2, BarChart3, ArrowLeft, GripVertical, Calendar, User as UserIcon, UserPlus, Crown, ShieldCheck, Mail, UserMinus, Users, AlertTriangle, MessageSquare, Flag, CheckSquare, History } from '@lucide/vue';
 import { index as boardsIndex, show as boardsShow, update as boardsUpdate, destroy as boardsDestroy, retro as boardsRetro } from '@/routes/boards';
 import { store as cardStore, update as cardUpdate, destroy as cardDestroy, move as cardMove } from '@/routes/cards';
 import { store as columnStore, update as columnUpdate, destroy as columnDestroy } from '@/routes/columns';
@@ -63,7 +63,11 @@ interface Card {
     assignee_id: number | null;
     created_by: number;
     due_date: string | null;
+    priority: 'low' | 'medium' | 'high';
+    color: string | null;
     assignee: { id: number; name: string } | null;
+    labels: { id: number; name: string; color: string }[];
+    subtasks: { id: number; title: string; is_complete: boolean; position: number }[];
     comments: Comment[];
 }
 interface Column {
@@ -81,6 +85,7 @@ interface Board {
     is_archived: boolean;
     columns: Column[];
     members: Member[];
+    labels: { id: number; name: string; color: string }[];
 }
 
 const props = defineProps<{ board: Board }>();
@@ -92,7 +97,7 @@ const auth = page.props.auth as Auth;
 const isOwner = () => props.board.owner_id === auth.user.id;
 
 // 实时协同：订阅 presence 频道，获取在线成员（他人改动能即时刷新看板）
-const { onlineMembers, connected } = useBoardRealtime(() => props.board.slug);
+const { onlineMembers, connected, editing, whisper } = useBoardRealtime(() => props.board.slug);
 
 // 当前用户在该看板的角色与权限
 const myRole = computed(() => {
@@ -291,6 +296,7 @@ function deleteColumn(col: Column) {
 
 /* ---------------- 看板：重命名 / 删除 ---------------- */
 const boardDialogOpen = ref(false);
+const activityDialogOpen = ref(false);
 const boardForm = useForm({ name: props.board.name });
 function openBoardDialog() {
     boardForm.name = board.value.name;
@@ -314,7 +320,16 @@ const cardForm = useForm({
     description: '',
     assignee_id: null as number | null,
     due_date: '',
+    priority: 'medium' as 'low' | 'medium' | 'high',
+    color: '' as string,
+    labels: [] as number[],
 });
+
+// 子任务新增输入、标签新建输入
+const newSubtask = ref('');
+const newLabelName = ref('');
+const newLabelColor = ref('#5C5CD6');
+const labelBusy = ref(false);
 
 function openCard(card: Card) {
     selectedCard.value = card;
@@ -322,7 +337,22 @@ function openCard(card: Card) {
     cardForm.description = card.description ?? '';
     cardForm.assignee_id = card.assignee_id;
     cardForm.due_date = card.due_date ?? '';
+    cardForm.priority = card.priority ?? 'medium';
+    cardForm.color = card.color ?? '';
+    cardForm.labels = card.labels.map((l) => l.id);
     dialogOpen.value = true;
+}
+
+// 编辑指示：进入/离开卡片标题或描述时广播给其他人
+function focusCard() {
+    if (selectedCard.value) {
+        whisper('card:focus', { cardId: selectedCard.value.id, id: auth.user.id, name: auth.user.name });
+    }
+}
+function blurCard() {
+    if (selectedCard.value) {
+        whisper('card:blur', { cardId: selectedCard.value.id, id: auth.user.id, name: auth.user.name });
+    }
 }
 function saveCard() {
     if (!selectedCard.value) return;
@@ -345,6 +375,50 @@ function deleteCard() {
             selectedCard.value = null;
         },
     });
+}
+
+/* ---------------- 标签 / 子任务 ---------------- */
+function toggleLabel(id: number): void {
+    const i = cardForm.labels.indexOf(id);
+    if (i === -1) cardForm.labels.push(id);
+    else cardForm.labels.splice(i, 1);
+}
+
+function createLabel(): void {
+    const name = newLabelName.value.trim();
+    if (!name || labelBusy.value) return;
+    labelBusy.value = true;
+    router.post(
+        `/boards/${board.value.slug}/labels`,
+        { name, color: newLabelColor.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                newLabelName.value = '';
+            },
+            onFinish: () => {
+                labelBusy.value = false;
+            },
+        },
+    );
+}
+
+function addSubtask(): void {
+    const title = newSubtask.value.trim();
+    if (!title || !selectedCard.value) return;
+    router.post(
+        '/subtasks',
+        { card_id: selectedCard.value.id, title },
+        { preserveScroll: true, onSuccess: () => (newSubtask.value = '') },
+    );
+}
+
+function toggleSubtask(st: { id: number; is_complete: boolean }): void {
+    router.patch(`/subtasks/${st.id}`, { is_complete: !st.is_complete }, { preserveScroll: true });
+}
+
+function deleteSubtask(st: { id: number }): void {
+    router.delete(`/subtasks/${st.id}`, { preserveScroll: true });
 }
 
 /* ---------------- 评论 ---------------- */
@@ -452,6 +526,8 @@ function initials(name: string): string {
 
 // 列色点：按索引取原型色板（indigo / teal / amber / rose / slate）
 const COLUMN_DOT_COLORS = ['#5B5BD6', '#0EA5A4', '#E8920C', '#E5484D', '#64748B'];
+// 卡片强调色预设
+const CARD_COLORS = ['#5C5CD6', '#E5484D', '#E8920C', '#0EA5A4', '#16A34A', '#64748B'];
 function columnDotColor(i: number): string {
     return COLUMN_DOT_COLORS[i % COLUMN_DOT_COLORS.length];
 }
@@ -461,6 +537,31 @@ function dueSoon(d: string): boolean {
     if (!d) return false;
     const t = (new Date(d).getTime() - Date.now()) / 86400000;
     return t <= 2;
+}
+
+// 优先级徽章配色
+function priorityClass(p: string): string {
+    if (p === 'high') return 'bg-red-100 text-red-700';
+    if (p === 'low') return 'bg-sky-100 text-sky-700';
+    return 'bg-secondary text-muted-foreground';
+}
+
+// 活动文案
+function activityText(a: { type: string; payload?: Record<string, unknown> }): string {
+    const p = a.payload || {};
+    const title = (p.title as string) ?? '';
+    switch (a.type) {
+        case 'card.created':
+            return t('board.activityCreated', { title });
+        case 'card.moved':
+            return t('board.activityMoved', { title });
+        case 'card.updated':
+            return t('board.activityUpdated', { title });
+        case 'card.deleted':
+            return t('board.activityDeleted', { title });
+        default:
+            return a.type;
+    }
 }
 </script>
 
@@ -530,6 +631,9 @@ function dueSoon(d: string): boolean {
                         <Link :href="boardsRetro(board.slug).url">
                             <BarChart3 class="mr-2 size-4" /> {{ t('board.retroDashboard') }}
                         </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="activityDialogOpen = true">
+                        <History class="mr-2 size-4" /> {{ t('board.activity') }}
                     </DropdownMenuItem>
                     <DropdownMenuItem @click="openBoardDialog">
                         <Pencil class="mr-2 size-4" /> {{ t('board.rename') }}
@@ -628,13 +732,24 @@ function dueSoon(d: string): boolean {
                         v-for="(card, index) in column.cards"
                         :key="card.id"
                         draggable="true"
-                        class="group cursor-pointer rounded-[10px] border border-border bg-card p-3 text-sm shadow-sm transition hover:border-primary/40 hover:shadow"
+                        class="group relative cursor-pointer rounded-[10px] border border-border bg-card p-3 text-sm shadow-sm transition hover:border-primary/40 hover:shadow"
                         :class="{ 'ring-2 ring-primary/40': overColId === column.id && overIndex === index }"
+                        :style="card.color ? { borderLeftColor: card.color, borderLeftWidth: '4px' } : {}"
                         @click="openCard(card)"
                         @dragstart="onCardDragStart($event, card, column.id)"
                         @dragend="onDragEnd"
                         @dragover.prevent="onCardDragOver($event, column.id, index)"
                     >
+                        <!-- 编辑中指示：他人正在编辑此卡 -->
+                        <span
+                            v-if="editing[card.id]"
+                            class="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                            :title="editing[card.id].name + ' 正在编辑'"
+                        >
+                            <span class="size-1.5 animate-pulse rounded-full bg-primary"></span>
+                            {{ editing[card.id].name }}
+                        </span>
+
                         <div class="flex items-start gap-2">
                             <GripVertical class="mt-0.5 size-4 shrink-0 text-muted-foreground/50" />
                             <div class="min-w-0 flex-1">
@@ -642,7 +757,21 @@ function dueSoon(d: string): boolean {
                                 <div v-if="card.description" class="mt-1 line-clamp-2 text-[13px] text-muted-foreground">
                                     {{ card.description }}
                                 </div>
+                                <!-- 标签 chips -->
+                                <div v-if="card.labels.length" class="mt-2 flex flex-wrap gap-1">
+                                    <span
+                                        v-for="label in card.labels"
+                                        :key="label.id"
+                                        class="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                                        :style="{ backgroundColor: label.color + '22', color: label.color }"
+                                    >
+                                        {{ label.name }}
+                                    </span>
+                                </div>
                                 <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <span v-if="card.priority && card.priority !== 'medium'" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5" :class="priorityClass(card.priority)">
+                                        <Flag class="size-3" /> {{ t('board.priority.' + card.priority) }}
+                                    </span>
                                     <span v-if="card.due_date" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs" :class="dueSoon(card.due_date) ? 'bg-amber-100 text-amber-700' : 'bg-secondary text-muted-foreground'">
                                         <Calendar class="size-3" /> {{ formatDate(card.due_date) }}
                                     </span>
@@ -652,6 +781,10 @@ function dueSoon(d: string): boolean {
                                     </span>
                                     <span v-if="card.comments.length" class="inline-flex items-center gap-1">
                                         <MessageSquare class="size-3.5" /> {{ card.comments.length }}
+                                    </span>
+                                    <span v-if="card.subtasks.length" class="inline-flex items-center gap-1">
+                                        <CheckSquare class="size-3.5" />
+                                        {{ card.subtasks.filter((s) => s.is_complete).length }}/{{ card.subtasks.length }}
                                     </span>
                                 </div>
                             </div>
@@ -747,7 +880,7 @@ function dueSoon(d: string): boolean {
             <div class="space-y-4">
                 <div class="grid gap-2">
                     <Label for="card-title">{{ t('board.cardTitle') }}</Label>
-                    <Input id="card-title" v-model="cardForm.title" />
+                    <Input id="card-title" v-model="cardForm.title" @focus="focusCard" @blur="blurCard" />
                     <InputError :message="cardForm.errors.title" />
                 </div>
 
@@ -759,6 +892,8 @@ function dueSoon(d: string): boolean {
                         rows="3"
                         class="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         :placeholder="t('board.cardDescPlaceholder')"
+                        @focus="focusCard"
+                        @blur="blurCard"
                     ></textarea>
                 </div>
 
@@ -777,6 +912,112 @@ function dueSoon(d: string): boolean {
                     <div class="grid gap-2">
                         <Label for="card-due">{{ t('board.dueDate') }}</Label>
                         <Input id="card-due" v-model="cardForm.due_date" type="date" />
+                    </div>
+                </div>
+
+                <!-- 优先级 -->
+                <div class="grid gap-2">
+                    <Label>{{ t('board.priority.label') }}</Label>
+                    <div class="flex gap-2">
+                        <button
+                            v-for="p in (['low', 'medium', 'high'] as const)"
+                            :key="p"
+                            type="button"
+                            class="flex-1 rounded-md border px-2 py-1.5 text-sm font-medium transition"
+                            :class="cardForm.priority === p ? priorityClass(p) + ' ring-1 ring-primary/40' : 'border-input hover:border-primary/40'"
+                            @click="cardForm.priority = p"
+                        >
+                            {{ t('board.priority.' + p) }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 强调色 -->
+                <div class="grid gap-2">
+                    <Label>{{ t('board.color') }}</Label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button
+                            v-for="c in CARD_COLORS"
+                            :key="c"
+                            type="button"
+                            class="size-6 rounded-full border-2 transition"
+                            :class="cardForm.color === c ? 'border-primary' : 'border-transparent'"
+                            :style="{ backgroundColor: c }"
+                            @click="cardForm.color = c"
+                        ></button>
+                        <button
+                            type="button"
+                            class="size-6 rounded-full border-2 text-xs transition"
+                            :class="!cardForm.color ? 'border-primary' : 'border-input'"
+                            @click="cardForm.color = ''"
+                        >
+                            ∅
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 标签 -->
+                <div class="grid gap-2">
+                    <Label>{{ t('board.labels') }}</Label>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button
+                            v-for="label in board.labels"
+                            :key="label.id"
+                            type="button"
+                            class="rounded-full px-2 py-0.5 text-xs font-medium transition"
+                            :style="{
+                                backgroundColor: cardForm.labels.includes(label.id) ? label.color : label.color + '22',
+                                color: label.color,
+                                outline: cardForm.labels.includes(label.id) ? '2px solid ' + label.color : '2px solid transparent',
+                            }"
+                            @click="toggleLabel(label.id)"
+                        >
+                            {{ label.name }}
+                        </button>
+                        <span v-if="board.labels.length === 0" class="text-xs text-muted-foreground">{{ t('board.noLabels') }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input
+                            v-model="newLabelName"
+                            class="h-8 flex-1 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                            :placeholder="t('board.newLabelName')"
+                            @keyup.enter="createLabel"
+                        />
+                        <input v-model="newLabelColor" type="color" class="size-8 rounded border border-input" />
+                        <Button size="sm" :disabled="labelBusy || !newLabelName.trim()" @click="createLabel">{{ t('board.addLabel') }}</Button>
+                    </div>
+                </div>
+
+                <!-- 子任务 -->
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between">
+                        <Label>{{ t('board.subtasks') }}</Label>
+                        <span v-if="selectedCard.subtasks.length" class="text-xs text-muted-foreground">
+                            {{ selectedCard.subtasks.filter((s) => s.is_complete).length }}/{{ selectedCard.subtasks.length }}
+                        </span>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label
+                            v-for="st in selectedCard.subtasks"
+                            :key="st.id"
+                            class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+                        >
+                            <input
+                                type="checkbox"
+                                :checked="st.is_complete"
+                                class="size-4 rounded border-input"
+                                @change="toggleSubtask(st)"
+                            />
+                            <span :class="st.is_complete ? 'text-muted-foreground line-through' : ''" class="flex-1">{{ st.title }}</span>
+                            <button type="button" class="text-muted-foreground hover:text-destructive" @click="deleteSubtask(st)">
+                                <Trash2 class="size-3.5" />
+                            </button>
+                        </label>
+                        <p v-if="selectedCard.subtasks.length === 0" class="text-xs text-muted-foreground">{{ t('board.noSubtasks') }}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <Input v-model="newSubtask" class="h-8 text-sm" :placeholder="t('board.subtaskPlaceholder')" @keyup.enter="addSubtask" />
+                        <Button size="sm" :disabled="!newSubtask.trim()" @click="addSubtask">{{ t('board.add') }}</Button>
                     </div>
                 </div>
 
@@ -814,6 +1055,40 @@ function dueSoon(d: string): boolean {
             <DialogFooter class="gap-2">
                 <Button variant="destructive" :disabled="cardForm.processing" @click="deleteCard">{{ t('board.deleteCard') }}</Button>
                 <Button :disabled="cardForm.processing" @click="saveCard">{{ t('board.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <!-- 活动面板 -->
+    <Dialog v-model:open="activityDialogOpen">
+        <DialogContent class="reflow-dialog sm:max-w-lg">
+            <DialogHeader>
+                <DialogTitle>{{ t('board.activity') }}</DialogTitle>
+                <DialogDescription>{{ t('board.activityDesc') }}</DialogDescription>
+            </DialogHeader>
+            <div class="max-h-96 space-y-3 overflow-y-auto">
+                <div
+                    v-for="(a, i) in board.activities"
+                    :key="a.id ?? i"
+                    class="flex items-start gap-3 text-sm"
+                >
+                    <span class="mt-1.5 size-2 shrink-0 rounded-full bg-primary/60"></span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-foreground">
+                            <span class="font-medium">{{ a.user?.name ?? t('board.unknownUser') }}</span>
+                            {{ activityText(a) }}
+                        </p>
+                        <p class="text-xs text-muted-foreground">{{ formatDate(a.created_at) }}</p>
+                    </div>
+                </div>
+                <p v-if="board.activities.length === 0" class="py-6 text-center text-sm text-muted-foreground">
+                    {{ t('board.noActivity') }}
+                </p>
+            </div>
+            <DialogFooter>
+                <DialogClose as-child>
+                    <Button variant="secondary">{{ t('board.close') }}</Button>
+                </DialogClose>
             </DialogFooter>
         </DialogContent>
     </Dialog>
